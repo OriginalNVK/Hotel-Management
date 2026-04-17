@@ -1,4 +1,4 @@
-import prisma from '../database/connectSQL.mjs';
+// import prisma from '../database/connectSQL.mjs';
 
 // Customer: {CustomerId, Name, IdentityCard, Address, Type}
 

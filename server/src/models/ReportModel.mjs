@@ -1,4 +1,4 @@
-import prisma from "../database/connectSQL.mjs";
+// import prisma from "../database/connectSQL.mjs";
 
 export default class ReportModel {
   static async getAllReportOverview() {
