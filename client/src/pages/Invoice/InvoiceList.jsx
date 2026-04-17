@@ -1,0 +1,219 @@
+import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+
+import { Title, Button } from '../../components';
+import {
+  getInvoices,
+  getCustomersByBookingId,
+  createInvoice,
+} from '../../services';
+
+const InvoiceList = () => {
+  const [invoices, setInvoices] = useState([]);
+
+  useEffect(() => {
+    const fetchInvoices = async () => {
+      const invoices = await getInvoices();
+      setInvoices(invoices);
+    };
+
+    fetchInvoices();
+  }, []);
+
+  const [selectedBooking, setSelectedBooking] = useState({
+    bookingId: 0,
+    isSelected: false,
+  });
+
+  const [selectedBookingList, setSelectedBookingList] = useState([]);
+
+  useEffect(() => {
+    const updateSelectedBookings = async () => {
+      // Skip if bookingId is 0 (initial state)
+      if (selectedBooking.bookingId === 0) return;
+
+      try {
+        const selectedCustomers = await getCustomersByBookingId(
+          selectedBooking.bookingId
+        );
+
+        if (selectedBooking.isSelected) {
+          setSelectedBookingList([
+            ...selectedBookingList,
+            {
+              bookingId: selectedBooking.bookingId,
+              customers: selectedCustomers,
+            },
+          ]);
+        } else {
+          setSelectedBookingList(
+            selectedBookingList.filter(
+              (booking) => booking.bookingId !== selectedBooking.bookingId
+            )
+          );
+        }
+      } catch (error) {
+        console.error('Error loading customers:', error);
+      }
+    };
+
+    updateSelectedBookings();
+  }, [selectedBooking]);
+
+  const handleSelect = (e) => {
+    if (e.target.checked) {
+      setSelectedBooking({
+        bookingId: invoices[e.target.value].BookingId,
+        isSelected: true,
+      });
+    } else {
+      setSelectedBooking({
+        bookingId: invoices[e.target.value].BookingId,
+        isSelected: false,
+      });
+    }
+  };
+
+  const formatDate = (date) => {
+    const dateObj = new Date(date);
+    const day = dateObj.getDate();
+    const month = dateObj.getMonth() + 1;
+    const year = dateObj.getFullYear();
+
+    return `${day}/${month}/${year}`;
+  };
+
+  const representativeOptions = useMemo(() => {
+    const mapById = new Map();
+
+    selectedBookingList.forEach((booking) => {
+      (booking.customers || []).forEach((customer) => {
+        const customerId = customer.CustomerId ?? customer.customerId;
+        const customerName = customer.Name ?? customer.name;
+
+        if (customerId != null && customerName) {
+          mapById.set(String(customerId), {
+            id: Number.parseInt(customerId, 10),
+            name: customerName,
+          });
+        }
+      });
+    });
+
+    return Array.from(mapById.values());
+  }, [selectedBookingList]);
+
+  const navigate = useNavigate();
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+
+    const representativeId = Number.parseInt(e.target.representative.value, 10);
+    const bookings = selectedBookingList.map((booking) => booking.bookingId);
+
+    if (bookings.length === 0) {
+      alert('Please select at least 1 booking');
+      return;
+    }
+
+    if (Number.isNaN(representativeId)) {
+      alert('Please select a valid representative');
+      return;
+    }
+
+    const data = {
+      RepresentativeId: representativeId,
+      Bookings: bookings,
+    };
+
+    try {
+      const response = await createInvoice(data);
+      const invoiceId = await response.json();
+      navigate(`/invoices/${invoiceId}`);
+    } catch (error) {
+      alert(error.message || 'Failed to create invoice');
+      console.error(error);
+    }
+  };
+
+  return (
+    <div className="flex flex-col w-full py-4 px-2 min-h-[351px]">
+      <Title title="Invoice List" />
+
+      <div className="lg:w-[70%] w-full mx-auto overflow-x-auto">
+        <table className="table-auto text-center w-full">
+          <thead className="table-header-group md:text-xl text-lg font-play text-zinc-100">
+            <tr className="table-row">
+              <th className="border bg-orange md:h-12 h-10 px-2">No</th>
+              <th className="border bg-orange px-2">Room</th>
+              <th className="border bg-orange px-2">Booking Date</th>
+              <th className="border bg-orange px-2">Nights</th>
+              <th className="border bg-orange px-2">Price</th>
+              <th className="border bg-orange px-2">Select</th>
+            </tr>
+          </thead>
+          <tbody className="md:text-lg text-base font-amethysta">
+            {invoices.map((invoice, index) => (
+              <tr key={index}>
+                <td className="border py-2 border-gray">{index + 1}</td>
+                <td className="border px-2 border-gray">
+                  {invoice.RoomNumber}
+                </td>
+                <td className="border px-2 border-gray">
+                  {formatDate(invoice.BookingDate)}
+                </td>
+                <td className="border px-2 border-gray">{invoice.Nights}</td>
+                <td className="border px-2 border-gray">
+                  {'$' + invoice.Price}
+                </td>
+                <td className="border px-2 border-gray">
+                  <input
+                    type="checkbox"
+                    onClick={handleSelect}
+                    value={index}
+                    className="cursor-pointer w-5 h-5 appearance-none border border-gray rounded-md checked:bg-orange checked:border-transparent mt-1"
+                  />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        <form
+          className="flex justify-between mt-6 gap-2"
+          onSubmit={handleSubmit}
+        >
+          <div className="flex justify-start items-center gap-2 md:text-lg text-md font-amethysta">
+            <label htmlFor="representative">Select Representative</label>
+            <select
+              className="rounded-md font-bold p-2 focus:ring-2 focus:ring-red border"
+              id="representative"
+              defaultValue=""
+            >
+              {representativeOptions.length > 0 ? (
+                <>
+                  <option value="" disabled>
+                    Select representative
+                  </option>
+                  {representativeOptions.map((customer) => (
+                    <option key={customer.id} value={customer.id}>
+                      {customer.name}
+                    </option>
+                  ))}
+                </>
+              ) : (
+                <option value="" disabled>
+                  No representative available
+                </option>
+              )}
+            </select>
+          </div>
+          <div className="flex items-center">
+            <Button text="Create Invoice" color="red" type="submit" />
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+export default InvoiceList;

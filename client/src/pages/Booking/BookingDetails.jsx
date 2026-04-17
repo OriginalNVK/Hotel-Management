@@ -1,0 +1,171 @@
+import { useState, useEffect, useRef } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+
+import { CustomerForm, Title, Button } from '../../components';
+
+import { createBooking, getRoomTypeByRoomNumber } from '../../services';
+
+const BookingDetails = () => {
+  const { id: roomId } = useParams();
+
+  const navigate = useNavigate();
+  const isExecuted = useRef(false);
+
+  const [customers, setCustomers] = useState([]);
+  const [type, setType] = useState();
+  const [errors, setErrors] = useState({});
+
+  useEffect(() => {
+    const fetchType = async () => {
+      if (isExecuted.current) return;
+      isExecuted.current = true;
+
+      const roomType = await getRoomTypeByRoomNumber(roomId);
+
+      if (roomType.length === 0) {
+        alert(`Room ${roomId} not found`);
+        navigate('/bookings');
+        return;
+      }
+
+      setType({
+        Type: roomType[0].Type,
+        Price: roomType[0].Price,
+        MaxOccupancy: roomType[0].Max_Occupancy,
+        SurchargeRate: roomType[0].Surcharge_Rate,
+        BaseCustomers: roomType[0].Min_Customer_for_Surcharge,
+      });
+
+      setCustomers(
+        Array.from({ length: roomType[0].Min_Customer_for_Surcharge })
+      );
+    };
+
+    fetchType();
+  }, [roomId, navigate]);
+
+  const handleAddCustomer = () => {
+    if (!type) {
+      alert('Room type information is still loading');
+      return;
+    }
+    if (customers.length >= type.MaxOccupancy) {
+      alert(`Room ${roomId} is at maximum occupancy of ${type.MaxOccupancy}`);
+      return;
+    }
+
+    if (customers.length == type.BaseCustomers) {
+      setCustomers((prev) => [...prev, prev.length + 1]);
+
+      alert(
+        `Room ${roomId} has a surcharge rate of ${
+          type.SurchargeRate * 100
+        }% for each additional customer`
+      );
+      return;
+    }
+
+    setCustomers((prev) => [...prev, prev.length + 1]);
+  };
+
+  const handleDeleteCustomer = () => {
+    if (customers.length <= 1) {
+      alert('Customer list cannot be empty');
+      return;
+    }
+
+    setCustomers((prev) => prev.slice(0, prev.length - 1));
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+
+    if (Object.values(errors).some((error) => error)) {
+      alert('Please fill in all fields correctly');
+      return;
+    }
+
+    const formData = new FormData(e.target);
+
+    const customerMap = {};
+    const customersData = [];
+
+    formData.forEach((value, key) => {
+      const [index, field] = key.split('-');
+
+      if (!customerMap[index]) {
+        customerMap[index] = {};
+      }
+
+      customerMap[index][field] = value;
+    });
+
+    for (const index in customerMap) {
+      customersData.push(customerMap[index]);
+    }
+
+    const bookingData = {
+      RoomId: Number.parseInt(roomId, 10),
+      Customers: customersData,
+    };
+
+    const response = await createBooking(bookingData);
+
+    if (response.status === 201) {
+      alert('Booking created successfully');
+      navigate('/bookings');
+    } else {
+      alert(response.text);
+      console.error(response.text);
+    }
+  };
+
+  const handleErrors = (index, field, error) => {
+    setErrors((prevErrors) => ({
+      ...prevErrors,
+      [`${index}-${field}`]: error,
+    }));
+  };
+
+  return (
+    <div className="flex flex-col w-full py-4 px-2 min-h-[351px]">
+      <Title title={`Booking Details - Room ${roomId}`} />
+
+      <div className="text-center font-play mt-[-16px] text-2xl opacity-60">
+        Start date:{' '}
+        <span className="font-bold">
+          {new Date().toLocaleDateString('en-GB')}
+        </span>
+      </div>
+
+      <div className="flex justify-center gap-2 mt-4 py-4">
+        <Button
+          color="green"
+          text="Add Customer"
+          onClick={() => handleAddCustomer()}
+        />
+        <Button
+          color="red"
+          text="Delete Customer"
+          onClick={() => handleDeleteCustomer()}
+        />
+      </div>
+
+      <form
+        className="flex flex-col items-center justify-evenly gap-4"
+        onSubmit={handleSubmit}
+      >
+        {customers.map((_, index) => (
+          <CustomerForm
+            key={index + 1}
+            index={index + 1}
+            handleErrors={handleErrors}
+          />
+        ))}
+        <Button color="orange" text="CONFIRM" type="submit" />
+      </form>
+    </div>
+  );
+};
+
+export default BookingDetails;
