@@ -35,10 +35,11 @@ app.use('/api/bookingcustomers', BookingCustomerRoutes);
 app.use('/api/reports', ReportRoutes);
 
 const HOST = process.env.BACKEND_HOSTNAME || 'localhost';
-const PORT = process.env.BACKEND_PORT || 3000;
 
-app.listen(PORT, HOST, () => {
-  console.log(`Server is running on http://${HOST}:${PORT}`);
+const PORT = process.env.PORT || 3000;
+
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`Server is running on port ${PORT}`);
 });
 
 app.get('/', (req, res) => {
